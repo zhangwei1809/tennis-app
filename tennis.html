@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>网球赛事管理</title>
+  <!-- 引入外部资源 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  
+  <!-- Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#FF7D00',
+            neutral: {
+              100: '#F5F7FA',
+              200: '#E4E7ED',
+              300: '#C0C6CF',
+              400: '#909399',
+              500: '#606266',
+              600: '#303133',
+            }
+          },
+          fontFamily: {
+            inter: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          boxShadow: {
+            'card': '0 4px 20px 0 rgba(0, 0, 0, 0.08)',
+            'hover': '0 8px 30px 0 rgba(0, 0, 0, 0.12)',
+          }
+        },
+      }
+    }
+  </script>
+  
+  <!-- 自定义工具类 -->
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .card-transition {
+        transition: all 0.3s ease;
+      }
+      .scrollbar-hide::-webkit-scrollbar {
+        display: none;
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .tab-active {
+        color: #165DFF;
+        border-bottom: 2px solid #165DFF;
+      }
+    }
+  </style>
+  
+  <style>
+    /* 基础样式 */
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      scroll-behavior: smooth;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* 动画效果 */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease forwards;
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.5s ease forwards;
+    }
+    
+    /* 底部导航栏固定定位 */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 40;
+    }
+    
+    /* 内容区域底部内边距，避免被底部导航遮挡 */
+    .main-content {
+      padding-bottom: 60px;
+    }
+  </style>
+</head>
+
+<body class="bg-neutral-100 text-neutral-600 min-h-screen flex flex-col">
+  <!-- 顶部导航栏 -->
+  <header class="bg-white shadow-sm sticky top-0 z-30">
+    <div class="container mx-auto px-4">
+      <div class="flex justify-between items-center h-16">
+        <!-- 品牌标识 -->
+        <div class="flex items-center space-x-2">
+          <i class="fa fa-tennis-ball text-primary text-2xl"></i>
+          <span class="text-xl font-bold text-neutral-600">网球<span class="text-primary">赛事通</span></span>
+        </div>
+        
+        <!-- 移动端菜单按钮 -->
+        <button id="mobile-menu-button" class="text-neutral-600 hover:text-primary focus:outline-none">
+          <i class="fa fa-bars text-xl"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主内容区 -->
+  <main class="flex-grow main-content">
+    <!-- 顶部标签切换 -->
+    <div class="bg-white shadow-sm sticky top-16 z-20">
+      <div class="flex justify-around">
+        <button class="tab-btn py-3 flex-1 text-center font-medium tab-active" data-tab="match-record">
+          比赛记录
+        </button>
+        <button class="tab-btn py-3 flex-1 text-center font-medium" data-tab="ranking">
+          积分排名
+        </button>
+        <button class="tab-btn py-3 flex-1 text-center font-medium" data-tab="players">
+          球员管理
+        </button>
+      </div>
+    </div>
+    
+    <!-- 比赛记录区域 -->
+    <section id="match-record" class="tab-content active py-4">
+      <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-neutral-600">比赛记录</h2>
+          <button id="add-match-btn" class="bg-primary hover:bg-primary/90 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center text-sm shadow-md">
+            <i class="fa fa-plus mr-1"></i> 添加记录
+          </button>
+        </div>
+        
+        <!-- 搜索和筛选 -->
+        <div class="bg-white rounded-lg p-3 mb-4 shadow-card">
+          <div class="flex flex-col gap-3">
+            <div class="relative">
+              <input type="text" placeholder="搜索选手姓名或赛事名称" 
+                class="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+              <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400"></i>
+            </div>
+            <div class="flex flex-row gap-3">
+              <select class="flex-1 px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+                <option value="">所有类型</option>
+                <option value="singles">单打</option>
+                <option value="doubles">双打</option>
+                <option value="mixed">混合双打</option>
+              </select>
+              <select class="flex-1 px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+                <option value="">所有状态</option>
+                <option value="completed">已完成</option>
+                <option value="upcoming">即将开始</option>
+                <option value="cancelled">已取消</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 比赛记录列表 -->
+        <div class="space-y-3 mb-4" id="match-list">
+          <!-- 比赛记录项将通过JS动态生成 -->
+        </div>
+        
+        <!-- 分页 -->
+        <div class="mt-4 flex justify-between items-center text-sm">
+          <div class="text-neutral-400">
+            共 <span id="total-match-count">24</span> 条记录
+          </div>
+          <div class="flex space-x-1">
+            <button class="px-3 py-1 rounded border border-neutral-200 text-neutral-400 hover:border-primary hover:text-primary transition-colors">
+              <i class="fa fa-angle-left"></i>
+            </button>
+            <button class="px-3 py-1 rounded border border-primary bg-primary text-white">1</button>
+            <button class="px-3 py-1 rounded border border-neutral-200 text-neutral-600 hover:border-primary hover:text-primary transition-colors">2</button>
+            <button class="px-3 py-1 rounded border border-neutral-200 text-neutral-600 hover:border-primary hover:text-primary transition-colors">3</button>
+            <button class="px-3 py-1 rounded border border-neutral-200 text-neutral-400 hover:border-primary hover:text-primary transition-colors">
+              <i class="fa fa-angle-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+    
+    <!-- 积分排名区域 -->
+    <section id="ranking" class="tab-content py-4">
+      <div class="container mx-auto px-4">
+        <div class="mb-4">
+          <h2 class="text-lg font-bold text-neutral-600 mb-2">积分排名</h2>
+          <p class="text-sm text-neutral-400">基于比赛结果自动计算的选手积分排名</p>
+        </div>
+        
+        <!-- 排名筛选 -->
+        <div class="flex flex-col sm:flex-row gap-3 mb-4">
+          <div class="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+            <button class="px-3 py-1.5 rounded-lg bg-primary text-white font-medium text-sm whitespace-nowrap">总排名</button>
+            <button class="px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 font-medium text-sm hover:bg-neutral-200 transition-colors whitespace-nowrap">月度排名</button>
+            <button class="px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 font-medium text-sm hover:bg-neutral-200 transition-colors whitespace-nowrap">年度排名</button>
+          </div>
+          <div class="flex space-x-2">
+            <select class="px-3 py-1.5 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+              <option value="singles">单打排名</option>
+              <option value="doubles">双打排名</option>
+            </select>
+            <button class="px-3 py-1.5 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors flex items-center text-sm">
+              <i class="fa fa-download mr-1"></i> 导出
+            </button>
+          </div>
+        </div>
+        
+        <!-- 前三名展示 -->
+        <div class="grid grid-cols-3 gap-3 mb-6">
+          <!-- 第二名 -->
+          <div class="bg-white rounded-xl shadow-card p-3 card-transition hover:shadow-hover flex flex-col items-center text-center">
+            <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-neutral-200 mb-2">
+              <img src="https://picsum.photos/id/64/200/200" alt="选手照片" class="w-full h-full object-cover">
+            </div>
+            <div class="absolute top-3 right-3 bg-secondary/10 text-secondary px-2 py-0.5 text-xs font-medium rounded-full">
+              亚军
+            </div>
+            <h4 class="font-semibold text-neutral-600 text-sm">李娜</h4>
+            <p class="text-xs text-neutral-400 mb-1">女子单打</p>
+            <div class="font-bold text-primary text-sm">1450 积分</div>
+            <div class="text-3xl font-bold text-neutral-200 mt-1">2</div>
+          </div>
+          
+          <!-- 第一名 -->
+          <div class="bg-white rounded-xl shadow-card p-3 card-transition hover:shadow-hover flex flex-col items-center text-center border-2 border-primary relative">
+            <div class="w-18 h-18 rounded-full overflow-hidden border-2 border-primary mb-2">
+              <img src="https://picsum.photos/id/91/200/200" alt="选手照片" class="w-full h-full object-cover">
+            </div>
+            <div class="absolute top-3 right-3 bg-primary text-white px-2 py-0.5 text-xs font-medium rounded-full">
+              冠军
+            </div>
+            <h4 class="font-bold text-neutral-600 text-base">张择</h4>
+            <p class="text-xs text-neutral-400 mb-1">男子单打</p>
+            <div class="font-bold text-primary text-base">1580 积分</div>
+            <div class="text-4xl font-bold text-primary/20 mt-1">1</div>
+          </div>
+          
+          <!-- 第三名 -->
+          <div class="bg-white rounded-xl shadow-card p-3 card-transition hover:shadow-hover flex flex-col items-center text-center">
+            <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-neutral-200 mb-2">
+              <img src="https://picsum.photos/id/22/200/200" alt="选手照片" class="w-full h-full object-cover">
+            </div>
+            <div class="absolute top-3 right-3 bg-amber-100 text-amber-600 px-2 py-0.5 text-xs font-medium rounded-full">
+              季军
+            </div>
+            <h4 class="font-semibold text-neutral-600 text-sm">王蔷</h4>
+            <p class="text-xs text-neutral-400 mb-1">女子单打</p>
+            <div class="font-bold text-primary text-sm">1320 积分</div>
+            <div class="text-3xl font-bold text-neutral-200 mt-1">3</div>
+          </div>
+        </div>
+        
+        <!-- 完整排名列表 -->
+        <div class="bg-white rounded-xl shadow-card overflow-hidden" id="ranking-list">
+          <!-- 排名项将通过JS动态生成 -->
+        </div>
+      </div>
+    </section>
+    
+    <!-- 球员管理区域 -->
+    <section id="players" class="tab-content py-4">
+      <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-bold text-neutral-600">球员管理</h2>
+          <button id="add-player-btn" class="bg-secondary hover:bg-secondary/90 text-white font-medium px-4 py-2 rounded-lg transition-all duration-200 flex items-center text-sm shadow-md">
+            <i class="fa fa-user-plus mr-1"></i> 添加球员
+          </button>
+        </div>
+        
+        <!-- 搜索 -->
+        <div class="relative mb-4">
+          <input type="text" placeholder="搜索球员姓名" 
+            class="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm bg-white shadow-sm">
+          <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400"></i>
+        </div>
+        
+        <!-- 球员列表 -->
+        <div class="grid grid-cols-2 gap-3" id="player-grid">
+          <!-- 球员卡片将通过JS动态生成 -->
+        </div>
+      </div>
+    </section>
+  </main>
+  
+  <!-- 添加比赛记录模态框 -->
+  <div id="add-match-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in m-4">
+      <div class="p-4 border-b border-neutral-200 flex justify-between items-center">
+        <h3 class="text-lg font-bold text-neutral-600">添加比赛记录</h3>
+        <button id="close-match-modal" class="text-neutral-400 hover:text-neutral-600 focus:outline-none">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <form id="add-match-form">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="tournament-name">赛事名称</label>
+              <input type="text" id="tournament-name" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="例如：城市网球公开赛">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="match-type">比赛类型</label>
+              <select id="match-type" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+                <option value="singles">单打</option>
+                <option value="doubles">双打</option>
+                <option value="mixed">混合双打</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-a">选手A</label>
+                <select id="player-a" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+                  <option value="">选择选手</option>
+                  <!-- 选手选项将通过JS动态生成 -->
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-b">选手B</label>
+                <select id="player-b" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+                  <option value="">选择选手</option>
+                  <!-- 选手选项将通过JS动态生成 -->
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-a-score">选手A得分</label>
+                <input type="text" id="player-a-score" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="例如：6-4,7-5">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-b-score">选手B得分</label>
+                <input type="text" id="player-b-score" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="例如：4-6,5-7">
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="match-date">比赛日期</label>
+                <input type="date" id="match-date" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="match-venue">比赛场地</label>
+                <input type="text" id="match-venue" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="例如：中央网球场">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="match-notes">比赛备注</label>
+              <textarea id="match-notes" rows="2" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="添加比赛相关备注信息"></textarea>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+              <button type="button" id="cancel-match-btn" class="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors text-sm">
+                取消
+              </button>
+              <button type="submit" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors shadow-md text-sm">
+                保存记录
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 添加球员模态框 -->
+  <div id="add-player-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[85vh] overflow-y-auto animate-fade-in m-4">
+      <div class="p-4 border-b border-neutral-200 flex justify-between items-center">
+        <h3 class="text-lg font-bold text-neutral-600">添加球员信息</h3>
+        <button id="close-player-modal" class="text-neutral-400 hover:text-neutral-600 focus:outline-none">
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="p-4">
+        <form id="add-player-form">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-name">球员姓名</label>
+              <input type="text" id="player-name" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="请输入球员姓名">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1">性别</label>
+              <div class="flex space-x-4">
+                <label class="flex items-center">
+                  <input type="radio" name="gender" value="男" class="mr-2 text-primary" checked>
+                  <span class="text-sm">男</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="radio" name="gender" value="女" class="mr-2 text-primary">
+                  <span class="text-sm">女</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-avatar">上传头像</label>
+              <div class="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center">
+                <i class="fa fa-upload text-neutral-400 text-2xl mb-2"></i>
+                <p class="text-sm text-neutral-400 mb-2">点击上传或拖拽文件至此处</p>
+                <input type="file" id="player-avatar" class="hidden" accept="image/*">
+                <button type="button" class="px-3 py-1 bg-neutral-100 text-neutral-600 rounded text-sm hover:bg-neutral-200 transition-colors" onclick="document.getElementById('player-avatar').click()">
+                  选择文件
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-matches">参赛场次</label>
+                <input type="number" id="player-matches" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="0" value="0">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-wins">获胜场次</label>
+                <input type="number" id="player-wins" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="0" value="0">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-neutral-600 mb-1" for="player-points">初始积分</label>
+              <input type="number" id="player-points" class="w-full px-3 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm" placeholder="0" value="0">
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+              <button type="button" id="cancel-player-btn" class="px-4 py-2 border border-neutral-200 rounded-lg text-neutral-600 hover:bg-neutral-100 transition-colors text-sm">
+                取消
+              </button>
+              <button type="submit" class="px-4 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-colors shadow-md text-sm">
+                保存信息
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 底部导航栏 -->
+  <nav class="bottom-nav bg-white border-t border-neutral-200 shadow-lg">
+    <div class="flex justify-around">
+      <a href="#match-record" class="tab-link flex flex-col items-center justify-center py-2 flex-1">
+        <i class="fa fa-history text-primary text-lg"></i>
+        <span class="text-xs mt-1 text-primary">比赛记录</span>
+      </a>
+      <a href="#ranking" class="tab-link flex flex-col items-center justify-center py-2 flex-1">
+        <i class="fa fa-trophy text-neutral-400 text-lg"></i>
+        <span class="text-xs mt-1 text-neutral-400">积分排名</span>
+      </a>
+      <a href="#players" class="tab-link flex flex-col items-center justify-center py-2 flex-1">
+        <i class="fa fa-users text-neutral-400 text-lg"></i>
+        <span class="text-xs mt-1 text-neutral-400">球员管理</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- JavaScript 代码 -->
+  <script>
+    // 模拟数据
+    const players = [
+      { id: 1, name: "张择", gender: "男", avatar: "https://picsum.photos/id/91/200/200", matches: 12, wins: 9, points: 1580, rankChange: 0 },
+      { id: 2, name: "李娜", gender: "女", avatar: "https://picsum.photos/id/64/200/200", matches: 10, wins: 8, points: 1450, rankChange: 1 },
+      { id: 3, name: "王蔷", gender: "女", avatar: "https://picsum.photos/id/22/200/200", matches: 11, wins: 7, points: 1320, rankChange: -1 },
+      { id: 4, name: "吴迪", gender: "男", avatar: "https://picsum.photos/id/33/200/200", matches: 9, wins: 6, points: 1280, rankChange: 2 },
+      { id: 5, name: "郑赛赛", gender: "女", avatar: "https://picsum.photos/id/44/200/200", matches: 8, wins: 5, points: 1150, rankChange: 0 },
+      { id: 6, name: "公茂鑫", gender: "男", avatar: "https://picsum.photos/id/55/200/200", matches: 10, wins: 6, points: 1080, rankChange: -2 },
+      { id: 7, name: "段莹莹", gender: "女", avatar: "https://picsum.photos/id/66/200/200", matches: 7, wins: 4, points: 960, rankChange: 1 },
+      { id: 8, name: "张帅", gender: "男", avatar: "https://picsum.photos/id/77/200/200", matches: 8, wins: 5, points: 920, rankChange: 0 }
+    ];
+    
+    const matches = [
+      { id: "M20240501", tournament: "城市网球公开赛", type: "单打", playerA: "张择", playerB: "吴迪", scoreA: "6-4,7-5", scoreB: "4-6,5-7", winner: "张择", date: "2024-05-01", venue: "中央网球场" },
+      { id: "M20240502", tournament: "城市网球公开赛", type: "单打", playerA: "李娜", playerB: "王蔷", scoreA: "7-6,6-3", scoreB: "6-7,3-6", winner: "李娜", date: "2024-05-02", venue: "1号球场" },
+      { id: "M20240503", tournament: "区域锦标赛", type: "双打", playerA: "张择/吴迪", playerB: "公茂鑫/张帅", scoreA: "6-3,6-4", scoreB: "3-6,4-6", winner: "张择/吴迪", date: "2024-05-03", venue: "2号球场" },
+      { id: "M20240505", tournament: "区域锦标赛", type: "单打", playerA: "王蔷", playerB: "郑赛赛", scoreA: "6-2,6-3", scoreB: "2-6,3-6", winner: "王蔷", date: "2024-05-05", venue: "中央网球场" },
+      { id: "M20240507", tournament: "全国网球联赛", type: "单打", playerA: "张择", playerB: "公茂鑫", scoreA: "6-4,6-2", scoreB: "4-6,2-6", winner: "张择", date: "2024-05-07", venue: "中央网球场" },
+      { id: "M20240508", tournament: "全国网球联赛", type: "单打", playerA: "李娜", playerB: "段莹莹", scoreA: "7-5,6-4", scoreB: "5-7,4-6", winner: "李娜", date: "2024-05-08", venue: "1号球场" },
+      { id: "M20240510", tournament: "城市网球公开赛", type: "混合双打", playerA: "张择/李娜", playerB: "吴迪/王蔷", scoreA: "6-3,7-5", scoreB: "3-6,5-7", winner: "张择/李娜", date: "2024-05-10", venue: "3号球场" },
+      { id: "M20240512", tournament: "区域锦标赛", type: "单打", playerA: "吴迪", playerB: "公茂鑫", scoreA: "6-3,6-4", scoreB: "3-6,4-6", winner: "吴迪", date: "2024-05-12", venue: "2号球场" }
+    ];
+    
+    // DOM 加载完成后执行
+    document.addEventListener('DOMContentLoaded', function() {
+      // 标签切换功能
+      const tabBtns = document.querySelectorAll('.tab-btn');
+      const tabContents = document.querySelectorAll('.tab-content');
+      const tabLinks = document.querySelectorAll('.tab-link');
+      
+      function switchTab(tabId) {
+        // 更新按钮状态
+        tabBtns.forEach(btn => {
+          if (btn.dataset.tab === tabId) {
+            btn.classList.add('tab-active');
+          } else {
+            btn.classList.remove('tab-active');
+          }
+        });
+        
+        // 更新底部导航状态
+        tabLinks.forEach(link => {
+          const href = link.getAttribute('href').substring(1);
+          if (href === tabId) {
+            link.querySelector('i').classList.remove('text-neutral-400');
+            link.querySelector('i').classList.add('text-primary');
+            link.querySelector('span').classList.remove('text-neutral-400');
+            link.querySelector('span').classList.add('text-primary');
+          } else {
+            link.querySelector('i').classList.remove('text-primary');
+            link.querySelector('i').classList.add('text-neutral-400');
+            link.querySelector('span').classList.remove('text-primary');
+            link.querySelector('span').classList.add('text-neutral-400');
+          }
+        });
+        
+        // 更新内容区域
+        tabContents.forEach(content => {
+          if (content.id === tabId) {
+            content.classList.add('active');
+          } else {
+            content.classList.remove('active');
+          }
+        });
+      }
+      
+      // 顶部标签点击事件
+      tabBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+          switchTab(this.dataset.tab);
+        });
+      });
+      
+      // 底部导航点击事件
+      tabLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const tabId = this.getAttribute('href').substring(1);
+          switchTab(tabId);
+        });
+      });
+      
+      // 渲染比赛记录列表
+      renderMatchList();
+      
+      // 渲染排名列表
+      renderRankingList();
+      
+      // 渲染球员卡片
+      renderPlayerCards();
+      
+      // 填充选手选择下拉框
+      populatePlayerSelects();
+      
+      // 比赛记录模态框操作
+      const addMatchBtn = document.getElementById('add-match-btn');
+      const addMatchModal = document.getElementById('add-match-modal');
+      const closeMatchModal = document.getElementById('close-match-modal');
+      const cancelMatchBtn = document.getElementById('cancel-match-btn');
+      const addMatchForm = document.getElementById('add-match-form');
+      
+      addMatchBtn.addEventListener('click', function() {
+        addMatchModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      });
+      
+      function closeMatchModalFunc() {
+        addMatchModal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+        addMatchForm.reset();
+      }
+      
+      closeMatchModal.addEventListener('click', closeMatchModalFunc);
+      cancelMatchBtn.addEventListener('click', closeMatchModalFunc);
+      
+      // 点击模态框外部关闭
+      addMatchModal.addEventListener('click', function(e) {
+        if (e.target === addMatchModal) {
+          closeMatchModalFunc();
+        }
+      });
+      
+      // 球员模态框操作
+      const addPlayerBtn = document.getElementById('add-player-btn');
+      const addPlayerModal = document.getElementById('add-player-modal');
+      const closePlayerModal = document.getElementById('close-player-modal');
+      const cancelPlayerBtn = document.getElementById('cancel-player-btn');
+      const addPlayerForm = document.getElementById('add-player-form');
+      
+      addPlayerBtn.addEventListener('click', function() {
+        addPlayerModal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      });
+      
+      function closePlayerModalFunc() {
+        addPlayerModal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+        addPlayerForm.reset();
+      }
+      
+      closePlayerModal.addEventListener('click', closePlayerModalFunc);
+      cancelPlayerBtn.addEventListener('click', closePlayerModalFunc);
+      
+      // 点击模态框外部关闭
+      addPlayerModal.addEventListener('click', function(e) {
+        if (e.target === addPlayerModal) {
+          closePlayerModalFunc();
+        }
+      });
+      
+      // 表单提交处理 - 添加比赛记录
+      addMatchForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 获取表单数据
+        const tournamentName = document.getElementById('tournament-name').value;
+        const matchType = document.getElementById('match-type').value;
+        const playerA = document.getElementById('player-a').options[document.getElementById('player-a').selectedIndex].text;
+        const playerB = document.getElementById('player-b').options[document.getElementById('player-b').selectedIndex].text;
+        const scoreA = document.getElementById('player-a-score').value;
+        const scoreB = document.getElementById('player-b-score').value;
+        const matchDate = document.getElementById('match-date').value;
+        const matchVenue = document.getElementById('match-venue').value;
+        
+        // 简单验证
+        if (!tournamentName || !playerA || !playerB || !scoreA || !scoreB || !matchDate) {
+          alert('请填写必填字段');
+          return;
+        }
+        
+        // 确定获胜者
+        const winner = determineWinner(scoreA, scoreB);
+        
+        // 生成新比赛ID
+        const newMatchId = 'M' + matchDate.replace(/-/g, '');
+        
+        // 创建新比赛记录
+        const newMatch = {
+          id: newMatchId,
+          tournament: tournamentName,
+          type: matchType === 'singles' ? '单打' : matchType === 'doubles' ? '双打' : '混合双打',
+          playerA: playerA,
+          playerB: playerB,
+          scoreA: scoreA,
+          scoreB: scoreB,
+          winner: winner,
+          date: matchDate,
+          venue: matchVenue
+        };
+        
+        // 添加到比赛列表
+        matches.unshift(newMatch);
+        
+        // 更新列表
+        renderMatchList();
+        
+        // 更新比赛总数
+        document.getElementById('total-match-count').textContent = matches.length;
+        
+        // 关闭模态框
+        closeMatchModalFunc();
+        
+        // 显示成功提示
+        alert('比赛记录添加成功！');
+      });
+      
+      // 表单提交处理 - 添加球员
+      addPlayerForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // 获取表单数据
+        const playerName = document.getElementById('player-name').value;
+        const gender = document.querySelector('input[name="gender"]:checked').value;
+        const matches = parseInt(document.getElementById('player-matches').value) || 0;
+        const wins = parseInt(document.getElementById('player-wins').value) || 0;
+        const points = parseInt(document.getElementById('player-points').value) || 0;
+        
+        // 简单验证
+        if (!playerName) {
+          alert('请输入球员姓名');
+          return;
+        }
+        
+        // 生成新球员ID
+        const newPlayerId = players.length + 1;
+        
+        // 随机头像
+        const avatarIds = [91, 64, 22, 33, 44, 55, 66, 77, 88, 99];
+        const randomAvatarId = avatarIds[Math.floor(Math.random() * avatarIds.length)];
+        
+        // 创建新球员
+        const newPlayer = {
+          id: newPlayerId,
+          name: playerName,
+          gender: gender,
+          avatar: `https://picsum.photos/id/${randomAvatarId}/200/200`,
+          matches: matches,
+          wins: wins,
+          points: points,
+          rankChange: 0
+        };
+        
+        // 添加到球员列表
+        players.push(newPlayer);
+        
+        // 更新列表
+        renderPlayerCards();
+        renderRankingList();
+        populatePlayerSelects();
+        
+        // 关闭模态框
+        closePlayerModalFunc();
+        
+        // 显示成功提示
+        alert('球员信息添加成功！');
+      });
+    });
+    
+    // 渲染比赛记录列表（移动端优化版）
+    function renderMatchList() {
+      const matchList = document.getElementById('match-list');
+      matchList.innerHTML = '';
+      
+      matches.slice(0, 10).forEach(match => {
+        const matchItem = document.createElement('div');
+        matchItem.className = 'bg-white rounded-xl shadow-card p-3 card-transition hover:shadow-hover';
+        
+        matchItem.innerHTML = `
+          <div class="flex justify-between items-start mb-2">
+            <h3 class="font-medium text-neutral-600 text-sm">${match.tournament}</h3>
+            <span class="px-2 py-0.5 rounded-full text-xs ${
+              match.type === '单打' ? 'bg-blue-100 text-blue-600' : 
+              match.type === '双打' ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+            }">${match.type}</span>
+          </div>
+          <div class="flex justify-between items-center mb-2">
+            <div class="flex-1">
+              <div class="flex items-center justify-between mb-1">
+                <span class="${match.winner === match.playerA ? 'font-medium text-primary' : 'text-neutral-600'} text-sm">${match.playerA}</span>
+                <span class="text-sm">${match.scoreA}</span>
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="${match.winner === match.playerB ? 'font-medium text-primary' : 'text-neutral-600'} text-sm">${match.playerB}</span>
+                <span class="text-sm">${match.scoreB}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex justify-between items-center pt-2 border-t border-neutral-100 text-xs text-neutral-400">
+            <span>${formatDate(match.date)}</span>
+            <span>${match.venue}</span>
+            <div class="flex space-x-1">
+              <button class="text-primary hover:text-primary/80 transition-colors" title="查看详情">
+                <i class="fa fa-eye"></i>
+              </button>
+              <button class="text-neutral-500 hover:text-neutral-700 transition-colors" title="编辑">
+                <i class="fa fa-edit"></i>
+              </button>
+              <button class="text-red-500 hover:text-red-700 transition-colors" title="删除">
+                <i class="fa fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        `;
+        
+        matchList.appendChild(matchItem);
+      });
+    }
+    
+    // 渲染排名列表（移动端优化版）
+    function renderRankingList() {
+      const rankingList = document.getElementById('ranking-list');
+      rankingList.innerHTML = '';
+      
+      // 按积分排序
+      const sortedPlayers = [...players].sort((a, b) => b.points - a.points);
+      
+      sortedPlayers.forEach((player, index) => {
+        const rankingItem = document.createElement('div');
+        rankingItem.className = `flex items-center p-3 border-b border-neutral-100 ${index < 3 ? 'bg-primary/5' : ''} hover:bg-neutral-50 transition-colors`;
+        
+        rankingItem.innerHTML = `
+          <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+            index === 0 ? 'bg-primary text-white' : 
+            index === 1 ? 'bg-secondary/20 text-secondary' : 
+            index === 2 ? 'bg-amber-100 text-amber-600' : 'bg-neutral-100 text-neutral-400'
+          } mr-3">
+            ${index + 1}
+          </div>
+          <div class="w-10 h-10 rounded-full overflow-hidden mr-3 flex-shrink-0">
+            <img src="${player.avatar}" alt="${player.name}" class="w-full h-full object-cover">
+          </div>
+          <div class="flex-1">
+            <div class="flex justify-between items-center">
+              <h4 class="font-medium text-neutral-600 text-sm">${player.name}</h4>
+              <span class="font-bold text-primary text-sm">${player.points}</span>
+            </div>
+            <div class="flex justify-between items-center mt-1">
+              <span class="text-xs text-neutral-400">${player.gender}子 · ${player.matches}场/${player.wins}胜</span>
+              <span class="${
+                player.rankChange > 0 ? 'text-green-500' : 
+                player.rankChange < 0 ? 'text-red-500' : 'text-neutral-400'
+              } text-xs flex items-center">
+                ${player.rankChange > 0 ? '<i class="fa fa-arrow-up mr-1"></i>' : 
+                  player.rankChange < 0 ? '<i class="fa fa-arrow-down mr-1"></i>' : ''}
+                ${Math.abs(player.rankChange)}
+              </span>
+            </div>
+          </div>
+        `;
+        
+        rankingList.appendChild(rankingItem);
+      });
+    }
+    
+    // 渲染球员卡片（移动端优化版）
+    function renderPlayerCards() {
+      const playerGrid = document.getElementById('player-grid');
+      playerGrid.innerHTML = '';
+      
+      players.forEach(player => {
+        const winRate = player.matches > 0 ? Math.round((player.wins / player.matches) * 100) : 0;
+        
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl shadow-card overflow-hidden card-transition hover:shadow-hover';
+        
+        card.innerHTML = `
+          <div class="relative">
+            <div class="h-24 bg-gradient-to-r from-primary/20 to-secondary/20 flex items-center justify-center">
+              <div class="w-16 h-16 rounded-full overflow-hidden border-3 border-white shadow-md">
+                <img src="${player.avatar}" alt="${player.name}" class="w-full h-full object-cover">
+              </div>
+            </div>
+            <div class="absolute top-2 right-2 bg-white rounded-full px-2 py-0.5 text-xs font-medium text-neutral-600 shadow-sm">
+              排名 #${getPlayerRank(player.id)}
+            </div>
+          </div>
+          <div class="p-3 text-center">
+            <h3 class="font-bold text-sm text-neutral-600 mb-0.5">${player.name}</h3>
+            <p class="text-xs text-neutral-400 mb-2">${player.gender}子</p>
+            <div class="flex justify-between items-center mb-2 text-xs">
+              <div class="text-center">
+                <p class="text-neutral-400">参赛</p>
+                <p class="font-bold text-neutral-600">${player.matches}</p>
+              </div>
+              <div class="text-center">
+                <p class="text-neutral-400">获胜</p>
+                <p class="font-bold text-green-500">${player.wins}</p>
+              </div>
+              <div class="text-center">
+                <p class="text-neutral-400">胜率</p>
+                <p class="font-bold text-neutral-600">${winRate}%</p>
+              </div>
+            </div>
+            <div class="bg-neutral-100 rounded-full h-1.5 mb-1.5">
+              <div class="bg-primary h-1.5 rounded-full" style="width: ${winRate}%"></div>
+            </div>
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-neutral-400">积分</span>
+              <span class="font-bold text-primary">${player.points}</span>
+            </div>
+          </div>
+        `;
+        
+        playerGrid.appendChild(card);
+      });
+    }
+    
+    // 填充选手选择下拉框
+    function populatePlayerSelects() {
+      const playerASelect = document.getElementById('player-a');
+      const playerBSelect = document.getElementById('player-b');
+      
+      // 清空现有选项（保留默认选项）
+      while (playerASelect.options.length > 1) {
+        playerASelect.remove(1);
+      }
+      while (playerBSelect.options.length > 1) {
+        playerBSelect.remove(1);
+      }
+      
+      players.forEach(player => {
+        const optionA = document.createElement('option');
+        optionA.value = player.id;
+        optionA.textContent = player.name;
+        
+        const optionB = document.createElement('option');
+        optionB.value = player.id;
+        optionB.textContent = player.name;
+        
+        playerASelect.appendChild(optionA);
+        playerBSelect.appendChild(optionB);
+      });
+    }
+    
+    // 辅助函数：格式化日期
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      return `${date.getMonth() + 1}月${date.getDate()}日`;
+    }
+    
+    // 辅助函数：确定比赛获胜者
+    function determineWinner(scoreA, scoreB) {
+      // 简单的分数比较逻辑
+      const setsA = scoreA.split(',').length;
+      const setsB = scoreB.split(',').length;
+      
+      if (setsA > setsB) return document.getElementById('player-a').options[document.getElementById('player-a').selectedIndex].text;
+      if (setsB > setsA) return document.getElementById('player-b').options[document.getElementById('player-b').selectedIndex].text;
+      
+      // 如果总局数相同，比较第一盘分数
+      const firstSetA = parseInt(scoreA.split(',')[0].split('-')[0]);
+      const firstSetB = parseInt(scoreB.split(',')[0].split('-')[0]);
+      
+      return firstSetA > firstSetB 
+        ? document.getElementById('player-a').options[document.getElementById('player-a').selectedIndex].text
+        : document.getElementById('player-b').options[document.getElementById('player-b').selectedIndex].text;
+    }
+    
+    // 辅助函数：获取选手排名
+    function getPlayerRank(playerId) {
+      const sortedPlayers = [...players].sort((a, b) => b.points - a.points);
+      return sortedPlayers.findIndex(player => player.id === playerId) + 1;
+    }
+  </script>
+</body>
+</html>
